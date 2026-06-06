@@ -22,10 +22,7 @@ RUN apk update && apk add --no-cache \
     # texlive = base installation including latex + dvisvgm commands
     texlive \
     texlive-dvi \
-    texmf-dist-latexrecommended \
-    texmf-dist-fontsrecommended \
-    texmf-dist-pictures \
-    texmf-dist-basic \
+    texmf-dist \
     # Utilities
     bash wget curl ca-certificates \
     && update-ca-certificates
@@ -57,9 +54,9 @@ RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && dvisvgm --version \
     && ffmpeg -version 2>&1 | head -1
 
-# ── Default DNS ───────────────────────────────────────────────────────────────
+# ── Default DNS ──────────────────────────────────────────────────────────────
 RUN printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf
 
-# ── Version marker ────────────────────────────────────────────────────────────
+# ── Version marker ───────────────────────────────────────────────────────────
 ARG BOOTSTRAP_VERSION=unknown
 RUN echo "${BOOTSTRAP_VERSION}" > /etc/manim-bootstrap-version
