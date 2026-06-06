@@ -30,6 +30,10 @@ RUN apk update && apk add --no-cache \
 # ── Stage 2: Install Python packages ─────────────────────────────────────────
 # manimpango needs compilation against pango headers installed above.
 # manim is mostly pure Python so installs quickly.
+# Upgrade pip first to resolve hash validation issues with newer package versions
+RUN pip3 install --break-system-packages --no-cache-dir \
+    --upgrade pip setuptools wheel
+
 RUN pip3 install --break-system-packages --no-cache-dir \
     manimpango \
     manim
@@ -57,6 +61,6 @@ RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
 # ── Default DNS ──────────────────────────────────────────────────────────────
 RUN printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf
 
-# ── Version marker ───────────────────────────────────────────────────────────
+# ── Version marker ──────────────────────────────────────────────────────────
 ARG BOOTSTRAP_VERSION=unknown
 RUN echo "${BOOTSTRAP_VERSION}" > /etc/manim-bootstrap-version
