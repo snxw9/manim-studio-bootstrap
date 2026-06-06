@@ -20,8 +20,8 @@ RUN apk update && apk add --no-cache \
     cairo-dev pango-dev \
     gobject-introspection-dev \
     pkgconfig \
-    # Build tools (needed only for manimpango compilation, removed after)
-    gcc musl-dev python3-dev \
+    # Build tools (needed for manimpango, moderngl, glcontext compilation, removed after)
+    build-base python3-dev \
     # Media
     ffmpeg \
     # Fonts
@@ -42,14 +42,14 @@ RUN pip3 install --break-system-packages --no-cache-dir \
 
 # ── Post-install cleanup ──────────────────────────────────────────────────────
 # Remove build tools and package cache to shrink the archive.
-RUN apk del gcc musl-dev python3-dev \
+RUN apk del build-base python3-dev \
     cairo-dev pango-dev gobject-introspection-dev pkgconfig \
     && rm -rf /var/cache/apk/* \
     && rm -rf /root/.cache \
     && find /usr/lib/python3* -name "*.pyc" -delete \
     && find /usr/lib/python3* -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
-# ── Verify ────────────────────────────────────────────────────────────
+# ── Verify ────────────────────────────────────────────────────────
 RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && python3 -c "import cairo; print('Cairo OK')" \
     && python3 -c "import manimpango; print('Manimpango OK')" \
