@@ -27,10 +27,7 @@ RUN apk update && apk add --no-cache \
     # Fonts
     font-dejavu font-noto \
     # LaTeX — Manim needs latex + dvisvgm for MathTex rendering
-    texlive \
-    texlive-dvi \
-    texlive-latex \
-    texlive-fonts-recommended \
+    texlive-full \
     texlive-xetex \
     # Utilities
     bash wget curl ca-certificates \
