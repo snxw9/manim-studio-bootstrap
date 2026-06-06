@@ -1,1 +1,9 @@
-
+{
+  "version": "1.0.0",
+  "manim_version": "0.18.1",
+  "python_version": "3.11",
+  "arch": "aarch64",
+  "min_app_version": 1,
+  "release_url": "https://github.com/snxw9/manim-studio-bootstrap/releases/latest",
+  "changelog": "Initial release — Alpine 3.19, Manim 0.18.1, LaTeX included"
+}
