@@ -1,1 +1,158 @@
+name: Build Manim Bootstrap
 
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Bootstrap version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── QEMU for arm64 emulation ────────────────────────────────────────────
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Determine version ───────────────────────────────────────────────────
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION}"
+
+      # ── Build arm64 rootfs ──────────────────────────────────────────────────
+      - name: Build rootfs image
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            --build-arg BOOTSTRAP_VERSION=${{ steps.version.outputs.version }} \
+            --output type=local,dest=./rootfs \
+            --progress plain \
+            .
+
+      # ── Package rootfs ──────────────────────────────────────────────────────
+      - name: Create bootstrap archive
+        run: |
+          cd rootfs
+          ARCHIVE="manim-bootstrap-aarch64-v${{ steps.version.outputs.version }}.tar.gz"
+          echo "Creating ${ARCHIVE}..."
+          tar -czf "../${ARCHIVE}" \
+            --exclude='./proc' \
+            --exclude='./sys' \
+            --exclude='./dev' \
+            --exclude='./tmp' \
+            .
+          cd ..
+          ls -lh "${ARCHIVE}"
+          echo "archive_name=${ARCHIVE}" >> $GITHUB_ENV
+
+      # ── Extract Termux proot binary from their apt repo ─────────────────────
+      - name: Extract proot from Termux apt
+        run: |
+          echo "Downloading Termux proot .deb..."
+          wget -q "https://plug-mirror.rcac.purdue.edu/termux/apt/termux-main/pool/main/p/proot/proot_5.1.107-65_aarch64.deb" \
+            -O proot.deb
+
+          echo "Extracting proot binary..."
+          mkdir -p proot_extract
+          cd proot_extract
+          ar x ../proot.deb
+          tar xf data.tar.xz
+          PROOT_BIN=$(find . -name "proot" -type f | head -1)
+          echo "Found proot at: ${PROOT_BIN}"
+          cp "${PROOT_BIN}" ../proot-aarch64
+          cd ..
+
+          # Verify it's a valid ELF binary
+          file proot-aarch64
+          ls -lh proot-aarch64
+
+      # ── Update manifest with real URLs ──────────────────────────────────────
+      - name: Update manifest
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          ARCHIVE="${{ env.archive_name }}"
+          ARCHIVE_SIZE=$(stat -c%s "${ARCHIVE}")
+          ARCHIVE_SHA256=$(sha256sum "${ARCHIVE}" | cut -d' ' -f1)
+          PROOT_SHA256=$(sha256sum proot-aarch64 | cut -d' ' -f1)
+
+          cat > bootstrap-manifest.json << EOF
+          {
+            "version": "${VERSION}",
+            "manim_version": "0.18.1",
+            "python_version": "3.11",
+            "arch": "aarch64",
+            "min_app_version": 1,
+            "release_url": "https://github.com/snxw9/manim-studio-bootstrap/releases/tag/v${VERSION}",
+            "bootstrap_url": "https://github.com/snxw9/manim-studio-bootstrap/releases/download/v${VERSION}/${ARCHIVE}",
+            "bootstrap_size_bytes": ${ARCHIVE_SIZE},
+            "bootstrap_sha256": "${ARCHIVE_SHA256}",
+            "proot_url": "https://github.com/snxw9/manim-studio-bootstrap/releases/download/v${VERSION}/proot-aarch64",
+            "proot_sha256": "${PROOT_SHA256}",
+            "changelog": "Bootstrap v${VERSION} — Alpine 3.19, Manim 0.18.1, LaTeX included",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          echo "Manifest:"
+          cat bootstrap-manifest.json
+
+      # ── Create GitHub Release ────────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Bootstrap v${{ steps.version.outputs.version }}
+          body: |
+            ## Manim Studio Bootstrap v${{ steps.version.outputs.version }}
+
+            Complete Alpine Linux arm64 rootfs with Manim pre-installed.
+
+            ### Contents
+            - Alpine Linux 3.19 (aarch64)
+            - Python 3.11
+            - Manim Community Edition 0.18.1
+            - Cairo + pycairo (pre-built)
+            - Pango + manimpango
+            - FFmpeg
+            - LaTeX (texlive + dvisvgm for MathTex)
+            - DejaVu + Noto fonts
+
+            ### Files
+            - `manim-bootstrap-aarch64-v${{ steps.version.outputs.version }}.tar.gz` — rootfs archive (~400MB)
+            - `proot-aarch64` — Termux proot binary for Android
+            - `bootstrap-manifest.json` — version metadata
+
+            ### Checksums
+            See `bootstrap-manifest.json` for SHA256 hashes.
+          files: |
+            ${{ env.archive_name }}
+            proot-aarch64
+            bootstrap-manifest.json
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
