@@ -5,7 +5,7 @@
 
 FROM --platform=linux/arm64 alpine:3.19
 
-# ── System packages ──────────────────────────────────────────────────────────
+# ── System packages ─────────────────────────────────────────────────────────
 # Use pre-built Alpine packages wherever possible to avoid compiling under QEMU.
 # py3-cairo    = pycairo (pre-built, avoids compiling against libcairo headers)
 # py3-numpy    = numpy   (pre-built, avoids long Cython compilation)
@@ -29,14 +29,14 @@ RUN apk update && apk add --no-cache \
     # LaTeX — Manim needs latex + dvisvgm for MathTex rendering
     texlive \
     texlive-dvi \
-    texmf-dist-latexrecommended \
-    texmf-dist-fontsrecommended \
-    texmf-dist-pictures \
+    texlive-latex \
+    texlive-fonts-recommended \
+    texlive-xetex \
     # Utilities
     bash wget curl ca-certificates \
     && update-ca-certificates
 
-# ── Python packages ───────────────────────────────────────────────────────────
+# ── Python packages ─────────────────────────────────────────────────────────
 # manimpango must compile from source (not in Alpine repos).
 # manim is pure Python on top — fast to install.
 RUN pip3 install --break-system-packages --no-cache-dir \
@@ -52,7 +52,7 @@ RUN apk del gcc musl-dev python3-dev \
     && find /usr/lib/python3* -name "*.pyc" -delete \
     && find /usr/lib/python3* -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
-# ── Verify ────────────────────────────────────────────────────────────────────
+# ── Verify ────────────────────────────────────────────────────────────
 RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && python3 -c "import cairo; print('Cairo OK')" \
     && python3 -c "import manimpango; print('Manimpango OK')" \
@@ -60,7 +60,7 @@ RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && dvisvgm --version \
     && ffmpeg -version | head -1
 
-# ── DNS stub ─────────────────────────────────────────────────────────────────
+# ── DNS stub ───────────────────────────────────────────────────────────
 # Default resolv.conf so the rootfs works immediately after extraction.
 # BootstrapInstaller.kt will overwrite this if needed.
 RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf \
