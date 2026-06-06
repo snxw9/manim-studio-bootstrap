@@ -29,6 +29,7 @@ RUN apk update && apk add --no-cache \
     # LaTeX — Manim needs latex + dvisvgm for MathTex rendering
     texlive-full \
     texlive-xetex \
+    dvisvgm \
     # Utilities
     bash wget curl ca-certificates \
     && update-ca-certificates
