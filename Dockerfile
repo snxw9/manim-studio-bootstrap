@@ -92,9 +92,6 @@ RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && ffmpeg -version 2>&1 | head -1 \
     && echo "All checks passed."
 
-# ── Default DNS ───────────────────────────────────────────────────────────────
-RUN printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf
-
 # ── Version marker ────────────────────────────────────────────────────────────
 ARG BOOTSTRAP_VERSION=unknown
 RUN echo "${BOOTSTRAP_VERSION}" > /etc/manim-bootstrap-version
