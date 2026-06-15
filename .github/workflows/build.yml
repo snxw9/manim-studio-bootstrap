@@ -59,8 +59,8 @@ jobs:
         run: |
           cd rootfs
           ARCHIVE="manim-bootstrap-aarch64-v${{ steps.version.outputs.version }}.tar.gz"
-          echo "Creating ${ARCHIVE}..."
           tar -czf "../${ARCHIVE}" \
+            --hard-dereference \
             --exclude='./proc' \
             --exclude='./sys' \
             --exclude='./dev' \
