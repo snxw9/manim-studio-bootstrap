@@ -61,54 +61,75 @@ jobs:
           ARCHIVE="manim-bootstrap-aarch64-v${{ steps.version.outputs.version }}.tar.gz"
           tar -czf "../${ARCHIVE}" \
             --hard-dereference \
+            --dereference \
             --exclude='./proc' \
             --exclude='./sys' \
             --exclude='./dev' \
+            --exclude='./dev/*' \
             --exclude='./tmp' \
+            --exclude='./run' \
+            --exclude='./var/run' \
+            --exclude='./var/lock' \
             .
           cd ..
           ls -lh "${ARCHIVE}"
           echo "archive_name=${ARCHIVE}" >> $GITHUB_ENV
 
       # ── Extract Termux proot binary from their apt repo ─────────────────────
-      - name: Extract proot from Termux apt
+      - name: Extract proot from Termux apt repository
         run: |
-          echo "Downloading Termux proot .deb..."
-          
-          # Try multiple mirrors with retry logic
-          MIRRORS=(
-            "https://packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107.76_aarch64.deb"
-            "https://plug-mirror.rcac.purdue.edu/termux/apt/termux-main/pool/main/p/proot/proot_5.1.107-65_aarch64.deb"
-            "https://mirror.termux.aryadytm.id/apt/termux-main/pool/main/p/proot/proot_5.1.107-65_aarch64.deb"
-            "https://termux.mentality.rip/termux-main/pool/main/p/proot/proot_5.1.107-65_aarch64.deb"
-          )
-          
-          DOWNLOADED=false
-          for mirror in "${MIRRORS[@]}"; do
-            if wget -q --timeout=30 --tries=3 "$mirror" -O proot.deb; then
-              echo "Successfully downloaded from: $mirror"
-              DOWNLOADED=true
-              break
-            fi
-            echo "Mirror failed: $mirror, trying next..."
-          done
-          
-          if [ "$DOWNLOADED" = false ]; then
-            echo "Failed to download from all mirrors"
+          echo "Fetching Termux package index..."
+          # Download the aarch64 package list and find latest proot
+          wget -q \
+            "https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
+            -O packages.gz
+
+          # Parse the Packages index to find proot's current filename
+          PROOT_PATH=$(zcat packages.gz | \
+            awk '/^Package: proot$/{found=1} found && /^Filename:/{print $2; exit}')
+
+          if [ -z "$PROOT_PATH" ]; then
+            echo "ERROR: Could not find proot in Termux package index"
             exit 1
           fi
 
-          echo "Extracting proot binary..."
+          PROOT_URL="https://packages.termux.dev/apt/termux-main/${PROOT_PATH}"
+          echo "Found proot at: ${PROOT_URL}"
+
+          # Download the .deb
+          wget -q "${PROOT_URL}" -O proot.deb
+
+          # Verify it downloaded
+          ls -lh proot.deb
+
+          # Extract proot binary from the .deb
+          # .deb format: ar archive containing data.tar.xz
           mkdir -p proot_extract
           cd proot_extract
           ar x ../proot.deb
-          tar xf data.tar.xz
+          
+          # Handle both .xz and .zst compression (newer dpkg uses .zst)
+          if [ -f "data.tar.xz" ]; then
+            tar xf data.tar.xz
+          elif [ -f "data.tar.zst" ]; then
+            apt-get install -y zstd 2>/dev/null || true
+            zstd -d data.tar.zst -o data.tar
+            tar xf data.tar
+          fi
+          
+          # Find the proot binary wherever it ended up
           PROOT_BIN=$(find . -name "proot" -type f | head -1)
-          echo "Found proot at: ${PROOT_BIN}"
+          if [ -z "$PROOT_BIN" ]; then
+            echo "ERROR: proot binary not found in .deb"
+            find . -type f | head -20
+            exit 1
+          fi
+          
+          echo "Found proot binary at: ${PROOT_BIN}"
           cp "${PROOT_BIN}" ../proot-aarch64
           cd ..
 
-          # Verify it's a valid ELF binary
+          # Verify it's a valid ELF binary for aarch64
           file proot-aarch64
           ls -lh proot-aarch64
 
