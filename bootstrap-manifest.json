@@ -5,5 +5,5 @@
   "arch": "aarch64",
   "min_app_version": 1,
   "release_url": "https://github.com/snxw9/manim-studio-bootstrap/releases/latest",
-  "changelog": "Initial release — Alpine 3.19, Manim 0.18.1, LaTeX included"
+  "changelog": "Initial release — Debian Bookworm, Manim 0.18.1, LaTeX included"
 }

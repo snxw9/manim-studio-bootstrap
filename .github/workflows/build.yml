@@ -58,22 +58,47 @@ jobs:
       - name: Create bootstrap archive
         run: |
           cd rootfs
+
+          # Convert known absolute symlinks to relative before archiving.
+          # These are the ones Android's tar rejects.
+          # We do this instead of --dereference which is catastrophically slow.
+          echo "Converting absolute symlinks to relative..."
+          find . -type l | while IFS= read -r link; do
+            target=$(readlink "$link")
+            if [[ "$target" == /* ]]; then
+              link_dir=$(dirname "$link")
+              # Calculate relative path from link's directory to absolute target
+              rel=$(python3 -c "
+          import os.path
+          link_dir = '${link_dir#.}'
+          target = '$target'
+          # Both paths are relative to rootfs root
+          rel = os.path.relpath(target, link_dir)
+          print(rel)
+          " 2>/dev/null)
+              if [[ -n "$rel" ]]; then
+                ln -sf "$rel" "$link" 2>/dev/null && \
+                  echo "  Fixed: $link -> $rel" || true
+              fi
+            fi
+          done
+
           ARCHIVE="manim-bootstrap-aarch64-v${{ steps.version.outputs.version }}.tar.gz"
+          echo "Creating ${ARCHIVE}..."
+
           tar -czf "../${ARCHIVE}" \
             --hard-dereference \
-            --dereference \
             --exclude='./proc' \
             --exclude='./sys' \
             --exclude='./dev' \
-            --exclude='./dev/*' \
             --exclude='./tmp' \
             --exclude='./run' \
-            --exclude='./var/run' \
-            --exclude='./var/lock' \
             .
+
           cd ..
-          ls -lh "${ARCHIVE}"
+          du -sh "${ARCHIVE}"
           echo "archive_name=${ARCHIVE}" >> $GITHUB_ENV
+
 
       # ── Extract Termux proot binary from their apt repo ─────────────────────
       - name: Extract proot from Termux apt repository
