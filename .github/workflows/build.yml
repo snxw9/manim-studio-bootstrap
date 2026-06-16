@@ -180,7 +180,7 @@ jobs:
             "bootstrap_sha256": "${ARCHIVE_SHA256}",
             "proot_url": "https://github.com/snxw9/manim-studio-bootstrap/releases/download/v${VERSION}/proot-aarch64",
             "proot_sha256": "${PROOT_SHA256}",
-            "changelog": "Bootstrap v${VERSION} — Debian 3.19, Manim 0.18.1, LaTeX included",
+            "changelog": "Bootstrap v${VERSION} — Debian 12, Manim 0.18.1, LaTeX included, optimized",
             "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
@@ -200,7 +200,7 @@ jobs:
             Complete Debian Linux arm64 rootfs with Manim pre-installed.
 
             ### Contents
-            - Debian Linux 3.19 (aarch64)
+            - Debian Linux 12 (aarch64)
             - Python 3.11
             - Manim Community Edition 0.18.1
             - Cairo + pycairo (pre-built)

@@ -65,22 +65,49 @@ RUN pip3 install --break-system-packages --no-cache-dir \
     manimpango \
     manim
 
-# ── Stage 3: Remove build tools ───────────────────────────────────────────────
-# The C compiler and dev headers are no longer needed after manimpango compiles.
-# Runtime libraries (libcairo2, libpango-1.0-0) are kept — manimpango needs them.
-RUN apt-get remove -y \
-        build-essential python3-dev \
-        libcairo2-dev libpango1.0-dev \
-        libgirepository1.0-dev pkg-config \
+# ── Stage 3: Aggressive cleanup to minimize archive size ──────────────────────
+RUN \
+    # Remove build tools
+    apt-get remove -y build-essential python3-dev \
+        libcairo2-dev libpango1.0-dev libgirepository1.0-dev pkg-config \
     && apt-get autoremove -y \
-    && rm -rf \
-        /var/lib/apt/lists/* \
-        /var/cache/apt/archives/* \
-        /root/.cache \
-        /tmp/* \
-    && find /usr/lib/python3 -name "*.pyc" -delete 2>/dev/null || true \
-    && find /usr/lib/python3 -name "__pycache__" -type d \
-       -exec rm -rf {} + 2>/dev/null || true
+    \
+    # Remove documentation (largest savings — TeX Live docs alone ~150MB)
+    && rm -rf /usr/share/doc \
+    && rm -rf /usr/share/man \
+    && rm -rf /usr/share/info \
+    && rm -rf /usr/share/lintian \
+    && rm -rf /usr/share/locale \
+    && rm -rf /usr/share/i18n \
+    \
+    # Remove TeX Live documentation specifically
+    && find /usr/share/texlive -name "*.pdf" -delete 2>/dev/null || true \
+    && find /usr/share/texmf -name "*.pdf" -delete 2>/dev/null || true \
+    && find /usr/share/texlive -maxdepth 3 -name "doc" -type d \
+       -exec rm -rf {} + 2>/dev/null || true \
+    \
+    # Remove Ghostscript — Manim doesn't use it
+    # (pulled in as TeX Live dependency but not needed)
+    && apt-get remove -y --auto-remove ghostscript 2>/dev/null || true \
+    \
+    # Remove Python cache and test files
+    && find /usr -name "*.pyc" -delete 2>/dev/null || true \
+    && find /usr -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib/python3 -name "test" -type d -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib/python3 -name "tests" -type d -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib/python3 -name "*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true \
+    \
+    # Strip debug symbols from binaries
+    && find /usr/bin /usr/lib -name "*.so*" -type f \
+       -exec strip --strip-unneeded {} + 2>/dev/null || true \
+    && strip --strip-unneeded /usr/bin/python3* 2>/dev/null || true \
+    && strip --strip-unneeded /usr/bin/ffmpeg 2>/dev/null || true \
+    \
+    # Remove apt cache
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/cache/apt/archives/* \
+    && rm -rf /root/.cache \
+    && rm -rf /tmp/*
 
 # ── Stage 4: Verify everything is working ────────────────────────────────────
 RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
