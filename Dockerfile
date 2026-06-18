@@ -41,13 +41,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip \
     python3-cairo python3-numpy python3-pillow \
-    libcairo2 libpango-1.0-0 libglib2.0-0 libgirepository-1.0-0 \
+    libcairo2 libpango-1.0-0 libglib2.0-0 libgirepository-1.0-1 \
     ffmpeg \
     fonts-dejavu fonts-noto-core \
     texlive-latex-base texlive-latex-extra texlive-latex-recommended texlive-fonts-recommended \
     dvisvgm \
     ca-certificates bash wget curl \
-    && apt-mark manual dvisvgm ffmpeg python3-cairo python3-numpy python3-pillow libcairo2 libpango-1.0-0 libglib2.0-0 libgirepository-1.0-0 \
+    && apt-mark manual dvisvgm ffmpeg python3-cairo python3-numpy python3-pillow libcairo2 libpango-1.0-0 libglib2.0-0 libgirepository-1.0-1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Ensure dynamic loader and ld cache exist (required for proot on Android)
