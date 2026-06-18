@@ -50,6 +50,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-mark manual dvisvgm ffmpeg python3-cairo python3-numpy python3-pillow libcairo2 libpango-1.0-0 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
+# Ensure dynamic loader and ld cache exist (required for proot on Android)
+RUN set -eux; \
+    # create /lib64 -> /lib for programs expecting it
+    ln -sfn /lib /lib64 || true; \
+    # ensure ld-linux-aarch64.so.1 points at the real loader
+    if [ ! -e /lib/ld-linux-aarch64.so.1 ]; then \
+      loader=$(ls /lib/aarch64-linux-gnu/ld-*.so 2>/dev/null | head -n1 || true); \
+      if [ -n "$loader" ]; then ln -sf "$loader" /lib/ld-linux-aarch64.so.1; fi; \
+    fi; \
+    # populate ld cache
+    ldconfig || true
+
 # Copy wheels built in the builder stage
 COPY --from=builder /wheels ${WHEEL_DIR}
 
