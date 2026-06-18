@@ -119,6 +119,12 @@ RUN \
     && rm -rf /root/.cache \
     && rm -rf /tmp/*
 
+# Ensure dvisvgm is still present after aggressive cleanup
+# (Some autoremove/cleanup sequences can remove it on certain images/architectures)
+RUN if ! command -v dvisvgm >/dev/null 2>&1; then \
+      apt-get update && apt-get install -y --no-install-recommends dvisvgm && rm -rf /var/lib/apt/lists/*; \
+    fi && apt-mark manual dvisvgm || true
+
 # ── Stage 4: Verify everything is working ────────────────────────────────────
 RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && python3 -c "import cairo; print('Cairo OK')" \
