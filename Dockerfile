@@ -55,6 +55,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates bash wget curl \
     \
     && update-ca-certificates \
+    && apt-mark manual dvisvgm \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Stage 2: Python packages ──────────────────────────────────────────────────
@@ -128,6 +129,6 @@ RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && ffmpeg -version 2>&1 | head -1 \
     && echo "All checks passed."
 
-# ── Version marker ──────────────────────────────────────────────────────────
+# ── Version marker ─────────────────────────────────────────────────────────[...]
 ARG BOOTSTRAP_VERSION=unknown
 RUN echo "${BOOTSTRAP_VERSION}" > /etc/manim-bootstrap-version
