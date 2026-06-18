@@ -61,3 +61,5 @@ A `bootstrap-manifest.json` file is generated alongside each release, containing
 * Build timestamps
 
 This manifest is consumed by downstream apps to verify and automate bootstrap downloads.
+
+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
