@@ -67,45 +67,54 @@ RUN pip3 install --break-system-packages --no-cache-dir \
 
 # ── Stage 3: Aggressive cleanup to minimize archive size ──────────────────────
 RUN \
+    # Remove Ghostscript — Manim doesn't use it, saves ~80MB
+    apt-get remove -y --auto-remove ghostscript libgs10 2>/dev/null || true \
+    \
     # Remove build tools
-    apt-get remove -y build-essential python3-dev \
+    && apt-get remove -y build-essential python3-dev \
         libcairo2-dev libpango1.0-dev libgirepository1.0-dev pkg-config \
     && apt-get autoremove -y \
     \
-    # Remove documentation (largest savings — TeX Live docs alone ~150MB)
+    # Remove all documentation
     && rm -rf /usr/share/doc \
     && rm -rf /usr/share/man \
     && rm -rf /usr/share/info \
     && rm -rf /usr/share/lintian \
-    && rm -rf /usr/share/locale \
-    && rm -rf /usr/share/i18n \
+    && rm -rf /usr/share/bug \
     \
-    # Remove TeX Live documentation specifically
-    && find /usr/share/texlive -name "*.pdf" -delete 2>/dev/null || true \
+    # Remove ALL locale data except C/POSIX
+    && find /usr/share/locale -mindepth 1 -maxdepth 1 \
+       ! -name "C" ! -name "C.UTF-8" ! -name "POSIX" \
+       -exec rm -rf {} + 2>/dev/null || true \
+    && rm -rf /usr/lib/locale \
+    \
+    # Remove Poppler CMap data (caused extraction errors, Manim doesn't need it)
+    && rm -rf /usr/share/poppler \
+    \
+    # Aggressive TeX Live doc cleanup (~150MB)
+    && find /usr/share/texlive -name "doc" -type d \
+       -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/share/texmf -name "*.pdf" -delete 2>/dev/null || true \
-    && find /usr/share/texlive -maxdepth 3 -name "doc" -type d \
+    && find /usr/share/texmf -name "README*" -delete 2>/dev/null || true \
+    \
+    # Remove Python test suites and cache
+    && find /usr -name "*.pyc" -delete 2>/dev/null || true \
+    && find /usr -name "__pycache__" -type d \
+       -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib/python3 -name "test" -type d \
+       -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib/python3 -name "tests" -type d \
        -exec rm -rf {} + 2>/dev/null || true \
     \
-    # Remove Ghostscript — Manim doesn't use it
-    # (pulled in as TeX Live dependency but not needed)
-    && apt-get remove -y --auto-remove ghostscript 2>/dev/null || true \
-    \
-    # Remove Python cache and test files
-    && find /usr -name "*.pyc" -delete 2>/dev/null || true \
-    && find /usr -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
-    && find /usr/lib/python3 -name "test" -type d -exec rm -rf {} + 2>/dev/null || true \
-    && find /usr/lib/python3 -name "tests" -type d -exec rm -rf {} + 2>/dev/null || true \
-    && find /usr/lib/python3 -name "*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true \
-    \
-    # Strip debug symbols from binaries
+    # Strip debug symbols from binaries (~50MB)
     && find /usr/bin /usr/lib -name "*.so*" -type f \
        -exec strip --strip-unneeded {} + 2>/dev/null || true \
-    && strip --strip-unneeded /usr/bin/python3* 2>/dev/null || true \
-    && strip --strip-unneeded /usr/bin/ffmpeg 2>/dev/null || true \
+    && find /usr/bin -type f -executable \
+       -exec strip --strip-unneeded {} + 2>/dev/null || true \
     \
     # Remove apt cache
     && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /var/cache/apt/archives/* \
+    && rm -rf /var/cache/apt \
     && rm -rf /root/.cache \
     && rm -rf /tmp/*
 
@@ -119,6 +128,6 @@ RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && ffmpeg -version 2>&1 | head -1 \
     && echo "All checks passed."
 
-# ── Version marker ────────────────────────────────────────────────────────────
+# ── Version marker ──────────────────────────────────────────────────────────
 ARG BOOTSTRAP_VERSION=unknown
 RUN echo "${BOOTSTRAP_VERSION}" > /etc/manim-bootstrap-version
