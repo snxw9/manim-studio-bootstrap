@@ -34,21 +34,18 @@ The rootfs is constructed and archived via GitHub Actions (`build.yml`). Key opt
 
 ### 1. Absolute Symlink Conversion
 Android's `tar` utility and filesystem structure reject absolute symlinks (e.g., links pointing to `/usr/share/...` instead of a relative destination).
-During the build, a post-processing step converts all absolute symlinks inside the rootfs to relative paths:
-```bash
-find . -type l | while IFS= read -r link; do
-  target=$(readlink "$link")
-  if [[ "$target" == /* ]]; then
-    # Converts absolute targets to relative targets relative to the link's directory
-    ...
-  fi
-done
-```
+During the build, a high-performance inline Python script recursively scans the rootfs and resolves/re-links all absolute symlinks to relative targets in milliseconds, replacing slower multi-process shell loops.
 
-### 2. High-Performance Archiving
+### 2. High-Performance Archiving & Compression
+* **Multi-threaded Compression (`pigz`):** The workflow installs and utilizes `pigz` (Parallel Implementation of GZip) to archive the rootfs, maximizing multi-core CPU usage on GitHub runners for significantly faster packaging.
 * **No `--dereference`:** We strictly avoid the `--dereference` flag, which instructs `tar` to follow every symlink and copy the actual file content. Since TeX Live contains tens of thousands of symlinks, using `--dereference` would cause the archive size to explode to over 20GB.
 * **`--hard-dereference`:** Only hard links are dereferenced, preserving regular symlinks.
 * **Reduced Archive Size:** Keeps the compressed `tar.gz` archive size down to approximately ~400MB.
+
+### 3. Build Caching & Single-Layer Cleanup
+* **GitHub Actions Cache:** Docker Buildx cache sharing is enabled using the `gha` cache backend (via `cache-from` and `cache-to` arguments), caching reusable layers on GitHub's infrastructure to speed up subsequent builds.
+* **Combined Installation, Build, and Cleanup:** The system package installation, Python package compilation (such as compiling `manimpango`), and aggressive file cleanup are executed within a single, unified `RUN` layer in the `Dockerfile`.
+* **Zero Residual Build Overhead:** This prevents compilers (`build-essential`, `python3-dev`), package headers (`libcairo2-dev`, `libpango1.0-dev`, etc.), and intermediate pip build/cache artifacts from persisting in the final layer, ensuring the exported rootfs is minimal and the build environment footprint is optimized.
 
 ---
 
@@ -62,4 +59,3 @@ A `bootstrap-manifest.json` file is generated alongside each release, containing
 
 This manifest is consumed by downstream apps to verify and automate bootstrap downloads.
 
-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

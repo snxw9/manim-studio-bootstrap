@@ -44,49 +44,51 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building version: ${VERSION}"
 
-      # ── Build arm64 rootfs ──────────────────────────────────────────────────
+      # ── Build arm64 rootfs (Optimized with GHA Cache) ───────────────────────
       - name: Build rootfs image
-        run: |
-          docker buildx build \
-            --platform linux/arm64 \
-            --build-arg BOOTSTRAP_VERSION=${{ steps.version.outputs.version }} \
-            --output type=local,dest=./rootfs \
-            --progress plain \
-            .
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          outputs: type=local,dest=./rootfs
+          build-args: BOOTSTRAP_VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # ── Package rootfs ──────────────────────────────────────────────────────
+      # ── Package rootfs (Optimized Symlinks & Compression) ───────────────────
       - name: Create bootstrap archive
         run: |
+          # Install pigz for multi-core compression
+          sudo apt-get update -y && sudo apt-get install -y pigz
+
           cd rootfs
 
-          # Convert known absolute symlinks to relative before archiving.
-          # These are the ones Android's tar rejects.
-          # We do this instead of --dereference which is catastrophically slow.
+          # Process all absolute symlinks in a single Python execution (Runs in milliseconds)
           echo "Converting absolute symlinks to relative..."
-          find . -type l | while IFS= read -r link; do
-            target=$(readlink "$link")
-            if [[ "$target" == /* ]]; then
-              link_dir=$(dirname "$link")
-              # Calculate relative path from link's directory to absolute target
-              rel=$(python3 -c "
-          import os.path
-          link_dir = '${link_dir#.}'
-          target = '$target'
-          # Both paths are relative to rootfs root
-          rel = os.path.relpath(target, link_dir)
-          print(rel)
-          " 2>/dev/null)
-              if [[ -n "$rel" ]]; then
-                ln -sf "$rel" "$link" 2>/dev/null && \
-                  echo "  Fixed: $link -> $rel" || true
-              fi
-            fi
-          done
+          python3 -c "
+          import os
+
+          for root, dirs, files in os.walk('.'):
+              for name in dirs + files:
+                  path = os.path.join(root, name)
+                  if os.path.islink(path):
+                      target = os.readlink(path)
+                      if target.startswith('/'):
+                          # Reconstruct absolute paths for relative calculation
+                          link_dir = '/' + os.path.dirname(path).lstrip('./')
+                          rel = os.path.relpath(target, link_dir)
+                          
+                          # Re-link
+                          os.remove(path)
+                          os.symlink(rel, path)
+                          print(f'  Fixed: {path} -> {rel}')
+          "
 
           ARCHIVE="manim-bootstrap-aarch64-v${{ steps.version.outputs.version }}.tar.gz"
-          echo "Creating ${ARCHIVE}..."
+          echo "Creating ${ARCHIVE} using pigz (multi-threaded)..."
 
-          tar -czf "../${ARCHIVE}" \
+          # Use pigz instead of gzip for vastly faster compression
+          tar -I pigz -cf "../${ARCHIVE}" \
             --hard-dereference \
             --exclude='./proc' \
             --exclude='./sys' \
@@ -99,17 +101,14 @@ jobs:
           du -sh "${ARCHIVE}"
           echo "archive_name=${ARCHIVE}" >> $GITHUB_ENV
 
-
       # ── Extract Termux proot binary from their apt repo ─────────────────────
       - name: Extract proot from Termux apt repository
         run: |
           echo "Fetching Termux package index..."
-          # Download the aarch64 package list and find latest proot
           wget -q \
             "https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
             -O packages.gz
 
-          # Parse the Packages index to find proot's current filename
           PROOT_PATH=$(zcat packages.gz | \
             awk '/^Package: proot$/{found=1} found && /^Filename:/{print $2; exit}')
 
@@ -121,28 +120,22 @@ jobs:
           PROOT_URL="https://packages.termux.dev/apt/termux-main/${PROOT_PATH}"
           echo "Found proot at: ${PROOT_URL}"
 
-          # Download the .deb
           wget -q "${PROOT_URL}" -O proot.deb
-
-          # Verify it downloaded
           ls -lh proot.deb
 
-          # Extract proot binary from the .deb
-          # .deb format: ar archive containing data.tar.xz
           mkdir -p proot_extract
           cd proot_extract
           ar x ../proot.deb
           
-          # Handle both .xz and .zst compression (newer dpkg uses .zst)
+          # Added sudo to apt-get to prevent permission denied errors in standard runners
           if [ -f "data.tar.xz" ]; then
             tar xf data.tar.xz
           elif [ -f "data.tar.zst" ]; then
-            apt-get install -y zstd 2>/dev/null || true
+            sudo apt-get install -y zstd 2>/dev/null || true
             zstd -d data.tar.zst -o data.tar
             tar xf data.tar
           fi
           
-          # Find the proot binary wherever it ended up
           PROOT_BIN=$(find . -name "proot" -type f | head -1)
           if [ -z "$PROOT_BIN" ]; then
             echo "ERROR: proot binary not found in .deb"
@@ -154,7 +147,6 @@ jobs:
           cp "${PROOT_BIN}" ../proot-aarch64
           cd ..
 
-          # Verify it's a valid ELF binary for aarch64
           file proot-aarch64
           ls -lh proot-aarch64
 

@@ -12,112 +12,74 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# ── Stage 1: System packages ──────────────────────────────────────────────────
+# ── Stage 1, 2 & 3 Combined: Install, Build, and Clean in ONE Layer ────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    \
-    # Python runtime + headers (headers needed only for manimpango compile)
+    # Python runtime + headers
     python3 python3-pip python3-dev \
-    \
-    # Pre-built Python C extensions — glibc wheels, no source compilation
+    # Pre-built Python C extensions
     python3-cairo python3-numpy python3-pillow \
-    \
-    # Cairo + Pango runtime libs and headers (manimpango compiles against these)
+    # Cairo + Pango runtime libs and headers
     libcairo2 libcairo2-dev \
     libpango-1.0-0 libpango1.0-dev \
-    libglib2.0-0 \
-    libgirepository1.0-dev \
-    pkg-config \
-    \
-    # Compiler toolchain — only needed to build manimpango, removed after
-    build-essential \
-    \
-    # Video encoding
-    ffmpeg \
-    \
-    # Fonts Manim references
+    libglib2.0-0 libgirepository1.0-dev \
+    pkg-config build-essential \
+    # Video encoding & Utilities
+    ffmpeg ca-certificates bash wget curl \
+    # Fonts
     fonts-dejavu fonts-noto-core \
-    \
-    # LaTeX for MathTex rendering
-    # texlive-latex-base     → latex, pdflatex commands
-    # texlive-latex-extra    → standalone, preview packages (Manim template needs these)
-    # texlive-latex-recommended → amsmath, geometry, etc.
-    # texlive-fonts-recommended → CM fonts, standard math fonts
-    # texlive-science        → physics package
-    # dvisvgm                → converts DVI to SVG (Manim's rendering pipeline)
-    texlive-latex-base \
-    texlive-latex-extra \
-    texlive-latex-recommended \
-    texlive-fonts-recommended \
-    texlive-science \
-    dvisvgm \
-    \
-    # Utilities
-    ca-certificates bash wget curl \
+    # TeX Live & DVI pipeline
+    texlive-latex-base texlive-latex-extra texlive-latex-recommended \
+    texlive-fonts-recommended texlive-science dvisvgm \
     \
     && update-ca-certificates \
+    # Mark dvisvgm so it isn't caught in the upcoming autoremove crossfire
     && apt-mark manual dvisvgm \
-    && rm -rf /var/lib/apt/lists/*
-
-# ── Stage 2: Python packages ──────────────────────────────────────────────────
-# pip sees python3-cairo, python3-numpy, python3-pillow already installed
-# and skips reinstalling them. Only manimpango needs compilation.
-# Everything else in Manim's dependency tree gets prebuilt glibc wheels.
-RUN pip3 install --break-system-packages --no-cache-dir \
-    manimpango \
-    manim
-
-# ── Stage 3: Aggressive cleanup to minimize archive size ──────────────────────
-RUN \
-    # Remove Ghostscript — Manim doesn't use it, saves ~80MB
-    apt-get remove -y --auto-remove ghostscript libgs10 2>/dev/null || true \
     \
-    # Remove build tools
-    && apt-get remove -y build-essential python3-dev \
+    # ── Install Python Packages ──
+    && pip3 install --break-system-packages --no-cache-dir manimpango manim \
+    \
+    # ── Aggressive Cleanup ──
+    # Remove compilers, headers, and unwanted packages
+    && apt-get remove -y --auto-remove \
+        build-essential python3-dev \
         libcairo2-dev libpango1.0-dev libgirepository1.0-dev pkg-config \
+        ghostscript libgs10 \
     && apt-get autoremove -y \
     \
-    # Remove all documentation
-    && rm -rf /usr/share/doc \
-    && rm -rf /usr/share/man \
-    && rm -rf /usr/share/info \
-    && rm -rf /usr/share/lintian \
-    && rm -rf /usr/share/bug \
+    # Clear apt cache
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/cache/apt \
     \
-    # Remove ALL locale data except C/POSIX
+    # Remove documentation, man pages, and locales
+    && rm -rf /usr/share/doc /usr/share/man /usr/share/info \
+    && rm -rf /usr/share/lintian /usr/share/bug /usr/share/poppler \
     && find /usr/share/locale -mindepth 1 -maxdepth 1 \
        ! -name "C" ! -name "C.UTF-8" ! -name "POSIX" \
        -exec rm -rf {} + 2>/dev/null || true \
     && rm -rf /usr/lib/locale \
     \
-    # Remove Poppler CMap data (caused extraction errors, Manim doesn't need it)
-    && rm -rf /usr/share/poppler \
-    \
-    # Aggressive TeX Live doc cleanup (~150MB)
-    && find /usr/share/texlive -name "doc" -type d \
-       -exec rm -rf {} + 2>/dev/null || true \
+    # Aggressive TeX Live doc cleanup
+    && find /usr/share/texlive -name "doc" -type d -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/share/texmf -name "*.pdf" -delete 2>/dev/null || true \
     && find /usr/share/texmf -name "README*" -delete 2>/dev/null || true \
     \
     # Remove Python test suites and cache
     && find /usr -name "*.pyc" -delete 2>/dev/null || true \
-    && find /usr -name "__pycache__" -type d \
-       -exec rm -rf {} + 2>/dev/null || true \
-    && find /usr/lib/python3 -name "test" -type d \
-       -exec rm -rf {} + 2>/dev/null || true \
-    && find /usr/lib/python3 -name "tests" -type d \
-       -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib/python3 -name "test" -type d -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib/python3 -name "tests" -type d -exec rm -rf {} + 2>/dev/null || true \
     \
-    # Strip debug symbols from binaries (~50MB)
-    && find /usr/bin /usr/lib -name "*.so*" -type f \
-       -exec strip --strip-unneeded {} + 2>/dev/null || true \
-    && find /usr/bin -type f -executable \
-       -exec strip --strip-unneeded {} + 2>/dev/null || true \
+    # Strip debug symbols from binaries
+    && find /usr/bin /usr/lib -name "*.so*" -type f -exec strip --strip-unneeded {} + 2>/dev/null || true \
+    && find /usr/bin -type f -executable -exec strip --strip-unneeded {} + 2>/dev/null || true \
     \
-    # Remove apt cache
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /var/cache/apt \
-    && rm -rf /root/.cache \
-    && rm -rf /tmp/*
+    # Final tmp/cache sweep
+    && rm -rf /root/.cache /tmp/*
+
+# Fallback: Ensure dvisvgm is still present (just in case apt dependency chains try to remove it)
+RUN if ! command -v dvisvgm >/dev/null 2>&1; then \
+      apt-get update && apt-get install -y --no-install-recommends dvisvgm && rm -rf /var/lib/apt/lists/*; \
+    fi && apt-mark manual dvisvgm || true
 
 # ── Stage 4: Verify everything is working ────────────────────────────────────
 RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
@@ -129,6 +91,6 @@ RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
     && ffmpeg -version 2>&1 | head -1 \
     && echo "All checks passed."
 
-# ── Version marker ─────────────────────────────────────────────────────────[...]
+# ── Version marker ───────────────────────────────────────────────────────────
 ARG BOOTSTRAP_VERSION=unknown
 RUN echo "${BOOTSTRAP_VERSION}" > /etc/manim-bootstrap-version
