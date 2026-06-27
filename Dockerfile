@@ -5,7 +5,9 @@ FROM --platform=linux/arm64 debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    # Explicitly add TinyTeX to the system PATH
+    PATH="/opt/TinyTeX/bin/aarch64-linux:${PATH}"
 
 # ── Combined Stage: Install, Build, and Clean in ONE Layer ────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -28,23 +30,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "Downloading TinyTeX Minimal..." \
     && wget -qO- "https://yihui.org/tinytex/install-unx.sh" | TINYTEX_INSTALLER="TinyTeX-1" sh \
     && mv ~/.TinyTeX /opt/TinyTeX \
-    # Clean up the script's default symlinks in the root home folder
     && rm -rf /root/bin \
     \
     # ── Install Specific Manim LaTeX Packages ──
     && echo "Installing required LaTeX packages for Manim..." \
-    && /opt/TinyTeX/bin/*/tlmgr install \
+    && tlmgr install \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e mathrsfs xcolor microtype dvisvgm \
         amsmath babel-english cm-super \
-    # Use tlmgr's native symlink tool to put latex/dvisvgm in /usr/local/bin
-    && /opt/TinyTeX/bin/*/tlmgr option sys_bin /usr/local/bin \
-    && /opt/TinyTeX/bin/*/tlmgr path add \
     \
     # ── Aggressive Pre-Uninstall Cleanup ──
-    # Strip binaries BEFORE removing build-essential (which provides binutils)
+    # ONLY strip Python shared extensions (like manimpango). NEVER strip /usr/bin.
     && find /usr/local/lib/python* /usr/lib/python* -name "*.so*" -type f -exec strip --strip-unneeded {} + 2>/dev/null || true \
-    && find /usr/bin /usr/local/bin -type f -executable -exec strip --strip-unneeded {} + 2>/dev/null || true \
     \
     # ── Remove Build Tools ──
     && apt-get remove -y --auto-remove \
@@ -67,7 +64,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /opt/TinyTeX/texmf-dist/doc \
     && rm -rf /opt/TinyTeX/texmf-dist/source \
     \
-    # Remove Python test suites and __pycache__ (Targeting /usr AND /usr/local)
+    # Remove Python test suites and __pycache__
     && find /usr /usr/local /opt -name "*.pyc" -delete 2>/dev/null || true \
     && find /usr /usr/local /opt -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/lib/python* /usr/local/lib/python* -name "test" -type d -exec rm -rf {} + 2>/dev/null || true \
