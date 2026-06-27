@@ -88,6 +88,10 @@ jobs:
           ARCHIVE="manim-bootstrap-aarch64-v${{ steps.version.outputs.version }}.tar.gz"
           echo "Creating ${ARCHIVE}..."
 
+          echo "🔍 X-RAY: Scanning rootfs for biggest folders..."
+          if [ -d ./rootfs ]; then du -ah ./rootfs; else du -ah .; fi | sort -rh | head -n 30
+          echo "──────────────────────────────────────────────"
+
           # Use pigz for fast, multi-threaded compression
           tar -I pigz -cf "../${ARCHIVE}" \
             --hard-dereference \
