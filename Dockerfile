@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # ── Combined Stage: Install, Build, and Clean in ONE Layer ────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Standard Python and rendering dependencies
-    # (Notice: python3-numpy and python3-pillow are REMOVED to prevent double-installs)
+    # (python3-numpy and python3-pillow removed to prevent double-installs)
     python3 python3-pip python3-dev \
     python3-cairo \
     libcairo2 libcairo2-dev \
@@ -19,13 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 libgirepository1.0-dev \
     pkg-config build-essential \
     ffmpeg ca-certificates bash wget curl perl xz-utils \
-    # Restored Noto fonts for wide character support
     fonts-dejavu fonts-noto-core \
     \
     && update-ca-certificates \
     \
     # ── Install Python Packages ──
-    # Pip installs the exact wheels Manim wants (Single install, no duplicates)
     && pip3 install --break-system-packages --no-cache-dir manimpango manim \
     \
     # ── Install TinyTeX ──
@@ -39,11 +37,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && tlmgr install \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e mathrsfs xcolor microtype dvisvgm \
-        # Restored cm-super font package
         amsmath babel-english cm-super \
     \
-    # ── THE >100MB X-RAY CLEANUP ──
-    # 1. Nuke LLVM/DRI hardware graphics drivers
+    # ── THE >100MB X-RAY CLEANUP (SAFE ONLY) ──
+    # 1. Nuke LLVM/DRI hardware graphics drivers (Manim runs headless)
     && rm -f /usr/lib/aarch64-linux-gnu/libLLVM-*.so* \
     && rm -rf /usr/lib/aarch64-linux-gnu/dri \
     \
@@ -51,9 +48,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
     && find /usr/local/lib/python* -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/local/lib/python* -type d -name "test" -exec rm -rf {} + 2>/dev/null || true \
-    \
-    # 3. Strip debug symbols from heavy C-extensions (Safely shrinks .so binaries)
-    && find /usr/local/lib/python* /usr/lib/python* -name "*.so*" -type f -exec strip --strip-unneeded {} + 2>/dev/null || true \
     \
     # ── Remove Build Tools ──
     && apt-get purge -y --auto-remove \
@@ -74,14 +68,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && find /usr /usr/local /opt -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
     && rm -rf /root/.cache /tmp/*
 
-# ── Stage 2: Verify everything is working ────────────────────────────────────
-RUN python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
-    && python3 -c "import cairo; print('Cairo OK')" \
-    && python3 -c "import manimpango; print('Manimpango OK')" \
-    && python3 -c "import numpy; print('NumPy', numpy.__version__, 'OK')" \
-    && latex --version | head -1 \
-    && dvisvgm --version \
-    && ffmpeg -version 2>&1 | head -1 \
+# ── Stage 2: Verify everything is working (Separated for debugging) ──────────
+RUN echo "Testing Cairo..." && python3 -c "import cairo; print('Cairo OK')" \
+    && echo "Testing Manimpango..." && python3 -c "import manimpango; print('Manimpango OK')" \
+    && echo "Testing NumPy..." && python3 -c "import numpy; print('NumPy', numpy.__version__, 'OK')" \
+    && echo "Testing Manim..." && python3 -c "import manim; print('Manim', manim.__version__, 'OK')" \
+    && echo "Testing LaTeX..." && latex --version | head -1 \
+    && echo "Testing Dvisvgm..." && dvisvgm --version \
+    && echo "Testing FFmpeg..." && ffmpeg -version 2>&1 | head -1 \
     && echo "All checks passed."
 
 # ── Version marker ───────────────────────────────────────────────────────────
