@@ -23,6 +23,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ── System Dependencies ─────────────────────────────────────────────────
+      - name: Install build tools (symlinks, zstd, pigz)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y symlinks zstd pigz
+
       # ── QEMU for arm64 emulation ────────────────────────────────────────────
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
