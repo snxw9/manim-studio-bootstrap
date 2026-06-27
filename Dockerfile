@@ -11,19 +11,21 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # ── Combined Stage: Install, Build, and Clean in ONE Layer ────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Standard Python and rendering dependencies
+    # (Notice: python3-numpy and python3-pillow are REMOVED to prevent double-installs)
     python3 python3-pip python3-dev \
-    python3-cairo python3-numpy python3-pillow \
+    python3-cairo \
     libcairo2 libcairo2-dev \
     libpango-1.0-0 libpango1.0-dev \
     libglib2.0-0 libgirepository1.0-dev \
     pkg-config build-essential \
     ffmpeg ca-certificates bash wget curl perl xz-utils \
+    # Restored Noto fonts for wide character support
     fonts-dejavu fonts-noto-core \
     \
     && update-ca-certificates \
     \
-    # ── Install Python Packages (THE FULL, SAFE WAY) ──
-    # We let Pip download the exact wheels Manim wants to guarantee 100% compatibility.
+    # ── Install Python Packages ──
+    # Pip installs the exact wheels Manim wants (Single install, no duplicates)
     && pip3 install --break-system-packages --no-cache-dir manimpango manim \
     \
     # ── Install TinyTeX ──
@@ -33,25 +35,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /root/bin \
     \
     # ── Install Specific Manim LaTeX Packages ──
-    # Brought back cm-super for advanced font support
     && echo "Installing required LaTeX packages for Manim..." \
     && tlmgr install \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e mathrsfs xcolor microtype dvisvgm \
+        # Restored cm-super font package
         amsmath babel-english cm-super \
     \
-    # ── SURGICAL, 100% SAFE CLEANUP ──
-    # 1. Nuke LLVM/DRI hardware drivers (Termux/proot cannot use these, Manim runs headless)
+    # ── THE >100MB X-RAY CLEANUP ──
+    # 1. Nuke LLVM/DRI hardware graphics drivers
     && rm -f /usr/lib/aarch64-linux-gnu/libLLVM-*.so* \
     && rm -rf /usr/lib/aarch64-linux-gnu/dri \
     \
-    # 2. Strip debug symbols (Standard production practice, safely shrinks binaries)
-    && find /usr/local/lib/python* /usr/lib/python* -name "*.so*" -type f -exec strip --strip-unneeded {} + 2>/dev/null || true \
-    \
-    # 3. Delete testing datasets (Manim does not run SciPy's internal QA tests)
+    # 2. Delete SciPy/NumPy developer testing datasets & dummy files
     && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
     && find /usr/local/lib/python* -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/local/lib/python* -type d -name "test" -exec rm -rf {} + 2>/dev/null || true \
+    \
+    # 3. Strip debug symbols from heavy C-extensions (Safely shrinks .so binaries)
+    && find /usr/local/lib/python* /usr/lib/python* -name "*.so*" -type f -exec strip --strip-unneeded {} + 2>/dev/null || true \
     \
     # ── Remove Build Tools ──
     && apt-get purge -y --auto-remove \
