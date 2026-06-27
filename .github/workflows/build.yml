@@ -173,7 +173,7 @@ jobs:
             "bootstrap_sha256": "${ARCHIVE_SHA256}",
             "proot_url": "https://github.com/snxw9/manim-studio-bootstrap/releases/download/v${VERSION}/proot-aarch64",
             "proot_sha256": "${PROOT_SHA256}",
-            "changelog": "Bootstrap v${VERSION} — Debian 12, Manim 0.18.1, LaTeX included, optimized",
+            "changelog": "Bootstrap v${VERSION} — Debian 12, Manim 0.18.1, TinyTeX included, multi-stage optimized",
             "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
@@ -199,7 +199,7 @@ jobs:
             - Cairo + pycairo (pre-built)
             - Pango + manimpango
             - FFmpeg
-            - LaTeX (texlive + dvisvgm for MathTex)
+            - LaTeX (TinyTeX + dvisvgm for MathTex)
             - DejaVu + Noto fonts
 
             ### Files

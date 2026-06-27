@@ -19,10 +19,9 @@ The bootstrap archive packages a complete Debian system tailored for Manim:
 * **Debian 12 (Bookworm) Slim** (`arm64` / `aarch64`)
 * **Python 3.11** + **Manim Community Edition** (v0.18.1)
 * **Pre-compiled libraries:** `libcairo2`, `libpango-1.0`, `pycairo`, `manimpango`
-* **LaTeX Environment (TeX Live):**
-  * `texlive-latex-base` & `texlive-latex-extra`
-  * `texlive-latex-recommended` & `texlive-fonts-recommended`
-  * `texlive-science` & `dvisvgm` (for rendering math formulas to SVGs)
+* **LaTeX Environment (TinyTeX):**
+  * Minimal, deterministic TeX Live distribution optimized for Manim.
+  * Pre-installed packages: `standalone`, `preview`, `doublestroke`, `physics`, `relsize`, `calligra`, `wasysym`, `ragged2e`, `mathrsfs`, `xcolor`, `microtype`, `dvisvgm`, `amsmath`, `babel-english`, `cm-super`.
 * **Multimedia:** `ffmpeg` for rendering MP4 animations
 * **Fonts:** DejaVu and Noto core fonts for proper text rendering
 
@@ -42,10 +41,11 @@ During the build, a high-performance inline Python script recursively scans the 
 * **`--hard-dereference`:** Only hard links are dereferenced, preserving regular symlinks.
 * **Reduced Archive Size:** Keeps the compressed `tar.gz` archive size down to approximately ~400MB.
 
-### 3. Build Caching & Single-Layer Cleanup
-* **GitHub Actions Cache:** Docker Buildx cache sharing is enabled using the `gha` cache backend (via `cache-from` and `cache-to` arguments), caching reusable layers on GitHub's infrastructure to speed up subsequent builds.
-* **Combined Installation, Build, and Cleanup:** The system package installation, Python package compilation (such as compiling `manimpango`), and aggressive file cleanup are executed within a single, unified `RUN` layer in the `Dockerfile`.
-* **Zero Residual Build Overhead:** This prevents compilers (`build-essential`, `python3-dev`), package headers (`libcairo2-dev`, `libpango1.0-dev`, etc.), and intermediate pip build/cache artifacts from persisting in the final layer, ensuring the exported rootfs is minimal and the build environment footprint is optimized.
+### 3. Multi-Stage Build & Fine-Grained Caching
+* **GitHub Actions Cache:** Docker Buildx cache sharing is enabled using the `gha` cache backend (via `cache-from` and `cache-to` arguments), caching reusable layers on GitHub's infrastructure.
+* **Multi-Stage Isolation:** All compilation tools (`build-essential`, `python3-dev`), package headers (`libcairo2-dev`, `libpango1.0-dev`, etc.), and intermediate build caches exist strictly in the `builder` stage and are discarded. Only the compiled python packages, TinyTeX distribution, and runtime libraries are copied to the final lightweight stage.
+* **Fine-Grained Layer Caching:** By splitting the build process into logical, sequential instructions in the builder stage (system dependencies -> python pip packages -> TinyTeX download -> LaTeX packages), Docker caches each step individually. Modifying a LaTeX package or bumping a version only invalidates subsequent steps, allowing Docker to reuse cached layers and dramatically accelerate build times.
+* **Zero Residual Build Overhead:** This setup guarantees that compilers, headers, apt-get cache/lists, and python test suites never reach the final stage, keeping the exported rootfs footprint completely minimal.
 
 ---
 
