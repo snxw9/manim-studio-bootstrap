@@ -44,50 +44,45 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building version: ${VERSION}"
 
-      # ── Build arm64 rootfs (Optimized with GHA Cache) ───────────────────────
+      # ── Build arm64 rootfs (WITH CACHE) ─────────────────────────────────────
       - name: Build rootfs image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/arm64
-          outputs: type=local,dest=./rootfs
-          build-args: BOOTSTRAP_VERSION=${{ steps.version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          # Use --load instead of type=local to save it to the Docker daemon natively
+          docker buildx build \
+            --platform linux/arm64 \
+            --build-arg BOOTSTRAP_VERSION=${{ steps.version.outputs.version }} \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            --load \
+            -t manim-bootstrap-img \
+            --progress plain \
+            .
 
-      # ── Package rootfs (Optimized Symlinks & Compression) ───────────────────
+      # ── Package rootfs ──────────────────────────────────────────────────────
       - name: Create bootstrap archive
         run: |
-          # Install pigz for multi-core compression
-          sudo apt-get update -y && sudo apt-get install -y pigz
-
+          echo "Exporting flat filesystem from Docker..."
+          
+          # Create a dummy container from the image
+          docker create --name temp_rootfs manim-bootstrap-img
+          
+          # Export the filesystem as a tar stream and extract it natively on the runner
+          mkdir -p rootfs
+          docker export temp_rootfs | tar -xC rootfs
+          
+          # Clean up the dummy container
+          docker rm temp_rootfs
+          
           cd rootfs
 
-          # Process all absolute symlinks in a single Python execution (Runs in milliseconds)
+          # The 'symlinks' utility instantly converts absolute links to relative
           echo "Converting absolute symlinks to relative..."
-          python3 -c "
-          import os
-
-          for root, dirs, files in os.walk('.'):
-              for name in dirs + files:
-                  path = os.path.join(root, name)
-                  if os.path.islink(path):
-                      target = os.readlink(path)
-                      if target.startswith('/'):
-                          # Reconstruct absolute paths for relative calculation
-                          link_dir = '/' + os.path.dirname(path).lstrip('./')
-                          rel = os.path.relpath(target, link_dir)
-                          
-                          # Re-link
-                          os.remove(path)
-                          os.symlink(rel, path)
-                          print(f'  Fixed: {path} -> {rel}')
-          "
+          symlinks -cr .
 
           ARCHIVE="manim-bootstrap-aarch64-v${{ steps.version.outputs.version }}.tar.gz"
-          echo "Creating ${ARCHIVE} using pigz (multi-threaded)..."
+          echo "Creating ${ARCHIVE}..."
 
-          # Use pigz instead of gzip for vastly faster compression
+          # Use pigz for fast, multi-threaded compression
           tar -I pigz -cf "../${ARCHIVE}" \
             --hard-dereference \
             --exclude='./proc' \
