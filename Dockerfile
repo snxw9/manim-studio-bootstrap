@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # ── Combined Stage: Install, Build, and Clean in ONE Layer ────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Standard Python and rendering dependencies
-    # (Notice ffmpeg is removed from here to stop X11 GUI bloat)
+    # (ffmpeg is removed from here to stop X11 GUI bloat)
     python3 python3-pip python3-dev \
     python3-cairo \
     libcairo2 libcairo2-dev \
@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # ── Install Python Packages ──
     && pip3 install --break-system-packages --no-cache-dir manimpango manim \
     \
-    # ── Install TinyTeX ──
+    # ── Install TinyTeX Minimal ──
     && echo "Downloading TinyTeX Minimal..." \
     && wget -qO- "https://yihui.org/tinytex/install-unx.sh" | TINYTEX_INSTALLER="TinyTeX-1" sh \
     && mv ~/.TinyTeX /opt/TinyTeX \
@@ -47,13 +47,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wasysym ragged2e mathrsfs xcolor microtype dvisvgm \
         amsmath babel-english cm-super \
     \
-    # ── THE >100MB X-RAY CLEANUP (SAFE ONLY) ──
-    # Using 'find' guarantees these are destroyed regardless of wildcard weirdness
-    && find /usr/lib/aarch64-linux-gnu -name "libLLVM*.so*" -delete \
-    && rm -rf /usr/lib/aarch64-linux-gnu/dri \
+    # ── THE SAFE CLEANUP ──
+    # ONLY remove safe Python dummy datasets (LLVM and dri are kept safe!)
     && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
-    && find /usr/local/lib/python* -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true \
-    && find /usr/local/lib/python* -type d -name "test" -exec rm -rf {} + 2>/dev/null || true \
     \
     # ── Remove Build Tools ──
     && apt-get purge -y --auto-remove \

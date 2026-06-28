@@ -43,8 +43,8 @@ During the build, a high-performance inline Python script recursively scans the 
 
 ### 3. Build Cleanup & Fine-Grained Caching
 * **GitHub Actions Cache:** Docker Buildx cache sharing is enabled using the `gha` cache backend (via `cache-from` and `cache-to` arguments), caching reusable layers on GitHub's infrastructure.
-* **Surgical Cleanup (LLVM & DRI):** Headless setups do not require heavy graphics drivers. We guarantee complete removal of LLVM (`libLLVM*.so*`) and DRI drivers under `/usr/lib/aarch64-linux-gnu` via targeted `find -delete` cleanup scripts.
-* **Zero Residual Build Overhead:** This setup guarantees that compilers, headers, apt-get cache/lists, and python test suites never reach the final stage, keeping the exported rootfs footprint completely minimal.
+* **Safe Cleanup:** Intermediate python test suites and testing datasets (such as SciPy datasets) are removed to reclaim space while keeping the system graphics drivers and math library binaries fully intact.
+* **Zero Residual Build Overhead:** This setup guarantees that compilers, headers, and apt-get cache/lists never reach the final stage, keeping the exported rootfs footprint completely minimal.
 
 ---
 
