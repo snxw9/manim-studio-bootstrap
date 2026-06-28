@@ -11,17 +11,25 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # ── Combined Stage: Install, Build, and Clean in ONE Layer ────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Standard Python and rendering dependencies
-    # (python3-numpy and python3-pillow removed to prevent double-installs)
+    # (Notice ffmpeg is removed from here to stop X11 GUI bloat)
     python3 python3-pip python3-dev \
     python3-cairo \
     libcairo2 libcairo2-dev \
     libpango-1.0-0 libpango1.0-dev \
     libglib2.0-0 libgirepository1.0-dev \
     pkg-config build-essential \
-    ffmpeg ca-certificates bash wget curl perl xz-utils \
+    ca-certificates bash wget curl perl xz-utils \
     fonts-dejavu fonts-noto-core \
     \
     && update-ca-certificates \
+    \
+    # ── Install BtbN Static FFmpeg (Bypasses ~150MB of GUI bloat) ──
+    && echo "Downloading BtbN Static FFmpeg for ARM64..." \
+    && wget -qO ffmpeg.tar.xz "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz" \
+    && mkdir ffmpeg-temp \
+    && tar -xf ffmpeg.tar.xz -C ffmpeg-temp --strip-components=1 \
+    && cp ffmpeg-temp/bin/ffmpeg ffmpeg-temp/bin/ffprobe /usr/local/bin/ \
+    && rm -rf ffmpeg.tar.xz ffmpeg-temp \
     \
     # ── Install Python Packages ──
     && pip3 install --break-system-packages --no-cache-dir manimpango manim \
@@ -40,11 +48,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         amsmath babel-english cm-super \
     \
     # ── THE >100MB X-RAY CLEANUP (SAFE ONLY) ──
-    # 1. Nuke LLVM/DRI hardware graphics drivers (Manim runs headless)
-    && rm -f /usr/lib/aarch64-linux-gnu/libLLVM-*.so* \
+    # Using 'find' guarantees these are destroyed regardless of wildcard weirdness
+    && find /usr/lib/aarch64-linux-gnu -name "libLLVM*.so*" -delete \
     && rm -rf /usr/lib/aarch64-linux-gnu/dri \
-    \
-    # 2. Delete SciPy/NumPy developer testing datasets & dummy files
     && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
     && find /usr/local/lib/python* -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/local/lib/python* -type d -name "test" -exec rm -rf {} + 2>/dev/null || true \
@@ -68,7 +74,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && find /usr /usr/local /opt -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
     && rm -rf /root/.cache /tmp/*
 
-# ── Stage 2: Verify everything is working (Separated for debugging) ──────────
+# ── Stage 2: Verify everything is working ────────────────────────────────────
 RUN echo "Testing Cairo..." && python3 -c "import cairo; print('Cairo OK')" \
     && echo "Testing Manimpango..." && python3 -c "import manimpango; print('Manimpango OK')" \
     && echo "Testing NumPy..." && python3 -c "import numpy; print('NumPy', numpy.__version__, 'OK')" \

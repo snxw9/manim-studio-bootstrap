@@ -22,7 +22,7 @@ The bootstrap archive packages a complete Debian system tailored for Manim:
 * **LaTeX Environment (TinyTeX):**
   * Minimal, daily-release TeX Live distribution (matching CTAN) optimized for Manim.
   * Pre-installed packages: `standalone`, `preview`, `doublestroke`, `physics`, `relsize`, `calligra`, `wasysym`, `ragged2e`, `mathrsfs`, `xcolor`, `microtype`, `dvisvgm`, `amsmath`, `babel-english`, `cm-super`.
-* **Multimedia:** `ffmpeg` for rendering MP4 animations
+* **Multimedia:** BtbN Static FFmpeg & FFprobe (bypasses ~150MB of X11/GUI library bloat)
 * **Fonts:** DejaVu and Noto core fonts for proper text rendering
 
 ---
@@ -36,15 +36,14 @@ Android's `tar` utility and filesystem structure reject absolute symlinks (e.g.,
 During the build, a high-performance inline Python script recursively scans the rootfs and resolves/re-links all absolute symlinks to relative targets in milliseconds, replacing slower multi-process shell loops.
 
 ### 2. High-Performance Archiving & Compression
-* **Multi-threaded Compression (`pigz`):** The workflow installs and utilizes `pigz` (Parallel Implementation of GZip) to archive the rootfs, maximizing multi-core CPU usage on GitHub runners for significantly faster packaging.
+* **Maximum Multi-threaded Compression (`pigz -9`):** The workflow utilizes `pigz` (Parallel GZip) at level 9 compression to minimize release archive sizes while leveraging multi-core parallelization for fast packaging.
 * **No `--dereference`:** We strictly avoid the `--dereference` flag, which instructs `tar` to follow every symlink and copy the actual file content. Since TeX Live contains tens of thousands of symlinks, using `--dereference` would cause the archive size to explode to over 20GB.
 * **`--hard-dereference`:** Only hard links are dereferenced, preserving regular symlinks.
-* **Reduced Archive Size:** Keeps the compressed `tar.gz` archive size down to approximately ~400MB.
+* **Reduced Archive Size:** Keeps the compressed `tar.gz` archive size down to approximately ~300-400MB.
 
-### 3. Multi-Stage Build & Fine-Grained Caching
+### 3. Build Cleanup & Fine-Grained Caching
 * **GitHub Actions Cache:** Docker Buildx cache sharing is enabled using the `gha` cache backend (via `cache-from` and `cache-to` arguments), caching reusable layers on GitHub's infrastructure.
-* **Multi-Stage Isolation:** All compilation tools (`build-essential`, `python3-dev`), package headers (`libcairo2-dev`, `libpango1.0-dev`, etc.), and intermediate build caches exist strictly in the `builder` stage and are discarded. Only the compiled python packages, TinyTeX distribution, and runtime libraries are copied to the final lightweight stage.
-* **Fine-Grained Layer Caching:** By splitting the build process into logical, sequential instructions in the builder stage (system dependencies -> python pip packages -> TinyTeX download -> LaTeX packages), Docker caches each step individually. Modifying a LaTeX package or bumping a version only invalidates subsequent steps, allowing Docker to reuse cached layers and dramatically accelerate build times.
+* **Surgical Cleanup (LLVM & DRI):** Headless setups do not require heavy graphics drivers. We guarantee complete removal of LLVM (`libLLVM*.so*`) and DRI drivers under `/usr/lib/aarch64-linux-gnu` via targeted `find -delete` cleanup scripts.
 * **Zero Residual Build Overhead:** This setup guarantees that compilers, headers, apt-get cache/lists, and python test suites never reach the final stage, keeping the exported rootfs footprint completely minimal.
 
 ---

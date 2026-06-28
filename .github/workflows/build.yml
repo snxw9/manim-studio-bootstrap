@@ -92,8 +92,8 @@ jobs:
           if [ -d ./rootfs ]; then du -ah ./rootfs; else du -ah .; fi | sort -rh | head -n 30
           echo "──────────────────────────────────────────────"
 
-          # Use pigz for fast, multi-threaded compression
-          tar -I pigz -cf "../${ARCHIVE}" \
+          # Use pigz -9 for max compression while keeping the safe hard-dereference
+          tar -I 'pigz -9' -cf "../${ARCHIVE}" \
             --hard-dereference \
             --exclude='./proc' \
             --exclude='./sys' \
