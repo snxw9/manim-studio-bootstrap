@@ -51,6 +51,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # ONLY remove safe Python dummy datasets (LLVM and dri are kept safe!)
     && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
     \
+    # Remove GCC compiler directory — runtime libs (libstdc++, libgcc_s) are
+    # in aarch64-linux-gnu/ and are unaffected. This removes compiler plugins only.
+    && rm -rf /usr/lib/gcc \
+    \
+    # Remove ffprobe — Manim only uses ffmpeg for video encoding
+    && rm -f /usr/local/bin/ffprobe \
+    \
     # ── Remove Build Tools ──
     && apt-get purge -y --auto-remove \
         build-essential gcc g++ cpp make python3-dev \
@@ -69,6 +76,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && find /usr /usr/local /opt -name "*.pyc" -delete 2>/dev/null || true \
     && find /usr /usr/local /opt -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
     && rm -rf /root/.cache /tmp/*
+
+# Persist TinyTeX PATH into the rootfs so it survives docker export
+RUN echo 'export PATH="/opt/TinyTeX/bin/aarch64-linux:$PATH"' >> /etc/profile \
+    && echo 'PATH="/opt/TinyTeX/bin/aarch64-linux:$PATH"' >> /etc/environment
 
 # ── Stage 2: Verify everything is working ────────────────────────────────────
 RUN echo "Testing Cairo..." && python3 -c "import cairo; print('Cairo OK')" \
