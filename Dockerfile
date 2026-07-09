@@ -58,6 +58,56 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Remove ffprobe — Manim only uses ffmpeg for video encoding
     && rm -f /usr/local/bin/ffprobe \
     \
+    # ── Build statx() compatibility shim ──
+    # glibc >= 2.28 tries statx() first for os.stat(). PRoot's statx()
+    # translation has a gap that breaks CPython's import machinery
+    # specifically when scanning directories to locate C-extension modules
+    # (cairo, manimpango). This LD_PRELOAD shim intercepts statx() and
+    # redirects it through fstatat(), which PRoot handles correctly.
+    && echo "Building statx compatibility shim..." \
+    && mkdir -p /tmp/shim && cd /tmp/shim \
+    && cat > statx_shim.c << 'SHIMEOF'
+#define _GNU_SOURCE
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <fcntl.h>
+#include <string.h>
+
+int statx(int dirfd, const char *pathname, int flags,
+          unsigned int mask, struct statx *statxbuf) {
+    struct stat st;
+    int fstatat_flags = 0;
+    if (flags & AT_SYMLINK_NOFOLLOW) fstatat_flags |= AT_SYMLINK_NOFOLLOW;
+    if (flags & AT_EMPTY_PATH) fstatat_flags |= AT_EMPTY_PATH;
+    if (fstatat(dirfd, pathname, &st, fstatat_flags) != 0) {
+        return -1;
+    }
+    memset(statxbuf, 0, sizeof(*statxbuf));
+    statxbuf->stx_mask = STATX_BASIC_STATS;
+    statxbuf->stx_blksize = (unsigned int)st.st_blksize;
+    statxbuf->stx_nlink = (unsigned int)st.st_nlink;
+    statxbuf->stx_uid = st.st_uid;
+    statxbuf->stx_gid = st.st_gid;
+    statxbuf->stx_mode = st.st_mode;
+    statxbuf->stx_ino = st.st_ino;
+    statxbuf->stx_size = (unsigned long long)st.st_size;
+    statxbuf->stx_blocks = (unsigned long long)st.st_blocks;
+    statxbuf->stx_atime.tv_sec = st.st_atime;
+    statxbuf->stx_mtime.tv_sec = st.st_mtime;
+    statxbuf->stx_ctime.tv_sec = st.st_ctime;
+    statxbuf->stx_rdev_major = major(st.st_rdev);
+    statxbuf->stx_rdev_minor = minor(st.st_rdev);
+    statxbuf->stx_dev_major = major(st.st_dev);
+    statxbuf->stx_dev_minor = minor(st.st_dev);
+    return 0;
+}
+SHIMEOF
+    && gcc -shared -fPIC -O2 -o statx_shim.so statx_shim.c \
+    && mkdir -p /usr/local/lib \
+    && cp statx_shim.so /usr/local/lib/statx_shim.so \
+    && cd / && rm -rf /tmp/shim \
+    && echo "statx shim built: $(ls -la /usr/local/lib/statx_shim.so)" \
+    \
     # ── Remove Build Tools ──
     && apt-get purge -y --auto-remove \
         build-essential gcc g++ cpp make python3-dev \
@@ -91,7 +141,6 @@ RUN echo "Testing Cairo..." && python3 -c "import cairo; print('Cairo OK')" \
     && echo "Testing FFmpeg..." && ffmpeg -version 2>&1 | head -1 \
     && echo "All checks passed."
 
-# ── Version marker ───────────────────────────────────────────────────────────
+# ── Version marker ─────────────────────────────────────────────────────────
 ARG BOOTSTRAP_VERSION=unknown
 RUN echo "${BOOTSTRAP_VERSION}" > /etc/manim-bootstrap-version
-
