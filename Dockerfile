@@ -102,6 +102,7 @@ int statx(int dirfd, const char *pathname, int flags,
     return 0;
 }
 SHIMEOF
+\
     && gcc -shared -fPIC -O2 -o statx_shim.so statx_shim.c \
     && mkdir -p /usr/local/lib \
     && cp statx_shim.so /usr/local/lib/statx_shim.so \
