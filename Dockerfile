@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-cairo \
     libcairo2 libcairo2-dev \
     libpango-1.0-0 libpango1.0-dev \
+    libpangocairo-1.0-0 \
     libglib2.0-0 libgirepository1.0-dev \
     pkg-config build-essential \
     ca-certificates bash wget curl perl xz-utils \
