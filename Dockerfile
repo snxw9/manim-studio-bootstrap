@@ -33,22 +33,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # ── Python packages ──
     && pip3 install --break-system-packages --no-cache-dir manimpango manim \
     \
-    # ── TinyTeX ──
-    && echo "Downloading TinyTeX Minimal..." \
-    && wget -qO- "https://yihui.org/tinytex/install-unx.sh" | TINYTEX_INSTALLER="TinyTeX-1" sh \
-    && mv ~/.TinyTeX /opt/TinyTeX \
-    && rm -rf /root/bin \
+    # ── TinyTeX (Daily Release Direct Tarball) ──
+    && echo "Downloading Daily TinyTeX Minimal..." \
+    && wget -qO tinytex.tar.xz "https://github.com/rstudio/tinytex-releases/releases/download/daily/TinyTeX-1-linux-arm64.tar.xz" \
+    && mkdir -p /opt/TinyTeX \
+    && tar -xf tinytex.tar.xz -C /opt/TinyTeX --strip-components=1 \
+    && rm tinytex.tar.xz \
     \
     # ── LaTeX packages Manim needs ──
     && echo "Installing required LaTeX packages for Manim..." \
-    # 1. Update tlmgr using absolute path
-    && /opt/TinyTeX/bin/aarch64-linux/tlmgr update --self --no-verify-repo \
-    # 2. Install dependencies using absolute path (NO || true masking)
-    && /opt/TinyTeX/bin/aarch64-linux/tlmgr install --no-verify-repo \
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr update --self \
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr install \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e mathrsfs xcolor microtype dvisvgm \
         amsmath babel-english cm-super \
-    # 3. Add to system path via symlinks (0 bytes bloat)
     && /opt/TinyTeX/bin/aarch64-linux/tlmgr path add \
     \
     # ── Safe cleanup that doesn't touch gcc yet ──
