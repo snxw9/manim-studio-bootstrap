@@ -48,31 +48,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         amsmath babel-english cm-super || true \
     && tlmgr update --self --no-verify-repo || true \
     \
-    # ── THE SAFE CLEANUP ──
-    # ONLY remove safe Python dummy datasets (LLVM and dri are kept safe!)
-    && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
-    \
-    # Remove GCC compiler directory — runtime libs (libstdc++, libgcc_s) are
-    # in aarch64-linux-gnu/ and are unaffected. This removes compiler plugins only.
-    && rm -rf /usr/lib/gcc \
-    \
-    # Remove ffprobe — Manim only uses ffmpeg for video encoding
-    && rm -f /usr/local/bin/ffprobe
-
-# ── Build statx() compatibility shim ──
-# glibc >= 2.28 tries statx() first for os.stat(). PRoot's statx()
-# translation has a gap that breaks CPython's import machinery when
-# scanning directories to locate C-extension modules (cairo, manimpango).
-# This LD_PRELOAD shim redirects statx() through fstatat(), which PRoot
-# handles correctly.
-#
-# Must be its own RUN — heredocs cannot be mixed with && continuation
-# chains in the same RUN instruction (that was the parse error above).
-RUN <<'SHIMSCRIPT'
-set -e
-mkdir -p /tmp/shim
-cd /tmp/shim
-cat > statx_shim.c << 'CEOF'
+    # ── Build statx() compatibility shim ──
+    # glibc >= 2.28 tries statx() first for os.stat(). PRoot's statx()
+    # translation has a gap that breaks CPython's import machinery when
+    # scanning directories to locate C-extension modules (cairo, manimpango).
+    # This LD_PRELOAD shim redirects statx() through fstatat(), which PRoot
+    # handles correctly.
+    && mkdir -p /tmp/shim && cd /tmp/shim \
+    && cat > statx_shim.c << 'CEOF'
 #define _GNU_SOURCE
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -108,17 +91,23 @@ int statx(int dirfd, const char *pathname, int flags,
     return 0;
 }
 CEOF
-gcc -shared -fPIC -O2 -o statx_shim.so statx_shim.c
-mkdir -p /usr/local/lib
-cp statx_shim.so /usr/local/lib/statx_shim.so
-cd /
-rm -rf /tmp/shim
-echo "statx shim built:"
-ls -la /usr/local/lib/statx_shim.so
-SHIMSCRIPT
+    && gcc -shared -fPIC -O2 -o statx_shim.so statx_shim.c \
+    && mkdir -p /usr/local/lib && cp statx_shim.so /usr/local/lib/statx_shim.so \
+    && echo "statx shim built:" && ls -la /usr/local/lib/statx_shim.so \
+    && cd / && rm -rf /tmp/shim \
+    \
+    # ── THE SAFE CLEANUP ──
+    # ONLY remove safe Python dummy datasets (LLVM and dri are kept safe!)
+    && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
+    \
+    # Remove GCC compiler directory — runtime libs (libstdc++, libgcc_s) are
+    # in aarch64-linux-gnu/ and are unaffected. This removes compiler plugins only.
+    && rm -rf /usr/lib/gcc \
+    \
+    # Remove ffprobe — Manim only uses ffmpeg for video encoding
+    && rm -f /usr/local/bin/ffprobe
 
 # ── Remove Build Tools + Final Filesystem Sweep ──
-# (unchanged from before — just isolated as its own RUN, no heredoc involved)
 RUN rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
     && apt-get purge -y --auto-remove \
         build-essential gcc g++ cpp make python3-dev \
