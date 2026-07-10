@@ -42,10 +42,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     \
     # ── Install Specific Manim LaTeX Packages ──
     && echo "Installing required LaTeX packages for Manim..." \
-    && tlmgr install \
+    && tlmgr install --no-verify-repo \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e mathrsfs xcolor microtype dvisvgm \
-        amsmath babel-english cm-super \
+        amsmath babel-english cm-super || true \
+    && tlmgr update --self --no-verify-repo || true \
     \
     # ── THE SAFE CLEANUP ──
     # ONLY remove safe Python dummy datasets (LLVM and dri are kept safe!)
