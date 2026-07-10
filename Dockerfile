@@ -41,11 +41,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     \
     # ── LaTeX packages Manim needs ──
     && echo "Installing required LaTeX packages for Manim..." \
-    && tlmgr install --no-verify-repo \
+    # 1. Update tlmgr using absolute path
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr update --self --no-verify-repo \
+    # 2. Install dependencies using absolute path (NO || true masking)
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr install --no-verify-repo \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e mathrsfs xcolor microtype dvisvgm \
-        amsmath babel-english cm-super || true \
-    && tlmgr update --self --no-verify-repo || true \
+        amsmath babel-english cm-super \
+    # 3. Add to system path via symlinks (0 bytes bloat)
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr path add \
     \
     # ── Safe cleanup that doesn't touch gcc yet ──
     && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
