@@ -8,10 +8,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/TinyTeX/bin/aarch64-linux:${PATH}"
 
-# ── Combined Stage: Install, Build, and Clean in ONE Layer ────────
+# ── Combined Stage: Install everything (gcc still present, needed below) ──
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Standard Python and rendering dependencies
-    # (ffmpeg is removed from here to stop X11 GUI bloat)
     python3 python3-pip python3-dev \
     python3-cairo \
     libcairo2 libcairo2-dev \
@@ -23,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     \
     && update-ca-certificates \
     \
-    # ── Install BtbN Static FFmpeg (Bypasses ~150MB of GUI bloat) ──
+    # ── Static FFmpeg (bypasses ~150MB of X11 GUI bloat) ──
     && echo "Downloading BtbN Static FFmpeg for ARM64..." \
     && wget -qO ffmpeg.tar.xz "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz" \
     && mkdir ffmpeg-temp \
@@ -31,16 +29,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && cp ffmpeg-temp/bin/ffmpeg ffmpeg-temp/bin/ffprobe /usr/local/bin/ \
     && rm -rf ffmpeg.tar.xz ffmpeg-temp \
     \
-    # ── Install Python Packages ──
+    # ── Python packages ──
     && pip3 install --break-system-packages --no-cache-dir manimpango manim \
     \
-    # ── Install TinyTeX Minimal ──
+    # ── TinyTeX ──
     && echo "Downloading TinyTeX Minimal..." \
     && wget -qO- "https://yihui.org/tinytex/install-unx.sh" | TINYTEX_INSTALLER="TinyTeX-1" sh \
     && mv ~/.TinyTeX /opt/TinyTeX \
     && rm -rf /root/bin \
     \
-    # ── Install Specific Manim LaTeX Packages ──
+    # ── LaTeX packages Manim needs ──
     && echo "Installing required LaTeX packages for Manim..." \
     && tlmgr install --no-verify-repo \
         standalone preview doublestroke physics relsize calligra \
@@ -48,71 +46,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         amsmath babel-english cm-super || true \
     && tlmgr update --self --no-verify-repo || true \
     \
-    # ── Build statx() compatibility shim ──
-    # glibc >= 2.28 tries statx() first for os.stat(). PRoot's statx()
-    # translation has a gap that breaks CPython's import machinery when
-    # scanning directories to locate C-extension modules (cairo, manimpango).
-    # This LD_PRELOAD shim redirects statx() through fstatat(), which PRoot
-    # handles correctly.
-    && mkdir -p /tmp/shim && cd /tmp/shim \
-    && cat > statx_shim.c << 'CEOF'
-#define _GNU_SOURCE
-#include <sys/stat.h>
-#include <sys/sysmacros.h>
-#include <fcntl.h>
-#include <string.h>
-
-int statx(int dirfd, const char *pathname, int flags,
-          unsigned int mask, struct statx *statxbuf) {
-    struct stat st;
-    int fstatat_flags = 0;
-    if (flags & AT_SYMLINK_NOFOLLOW) fstatat_flags |= AT_SYMLINK_NOFOLLOW;
-    if (flags & AT_EMPTY_PATH) fstatat_flags |= AT_EMPTY_PATH;
-    if (fstatat(dirfd, pathname, &st, fstatat_flags) != 0) {
-        return -1;
-    }
-    memset(statxbuf, 0, sizeof(*statxbuf));
-    statxbuf->stx_mask = STATX_BASIC_STATS;
-    statxbuf->stx_blksize = (unsigned int)st.st_blksize;
-    statxbuf->stx_nlink = (unsigned int)st.st_nlink;
-    statxbuf->stx_uid = st.st_uid;
-    statxbuf->stx_gid = st.st_gid;
-    statxbuf->stx_mode = st.st_mode;
-    statxbuf->stx_ino = st.st_ino;
-    statxbuf->stx_size = (unsigned long long)st.st_size;
-    statxbuf->stx_blocks = (unsigned long long)st.st_blocks;
-    statxbuf->stx_atime.tv_sec = st.st_atime;
-    statxbuf->stx_mtime.tv_sec = st.st_mtime;
-    statxbuf->stx_ctime.tv_sec = st.st_ctime;
-    statxbuf->stx_rdev_major = major(st.st_rdev);
-    statxbuf->stx_rdev_minor = minor(st.st_rdev);
-    statxbuf->stx_dev_major = major(st.st_dev);
-    statxbuf->stx_dev_minor = minor(st.st_dev);
-    return 0;
-}
-CEOF
-    && gcc -shared -fPIC -O2 -o statx_shim.so statx_shim.c \
-    && mkdir -p /usr/local/lib && cp statx_shim.so /usr/local/lib/statx_shim.so \
-    && echo "statx shim built:" && ls -la /usr/local/lib/statx_shim.so \
-    && cd / && rm -rf /tmp/shim \
-    \
-    # ── THE SAFE CLEANUP ──
-    # ONLY remove safe Python dummy datasets (LLVM and dri are kept safe!)
+    # ── Safe cleanup that doesn't touch gcc yet ──
     && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
-    \
-    # Remove GCC compiler directory — runtime libs (libstdc++, libgcc_s) are
-    # in aarch64-linux-gnu/ and are unaffected. This removes compiler plugins only.
-    && rm -rf /usr/lib/gcc \
-    \
-    # Remove ffprobe — Manim only uses ffmpeg for video encoding
     && rm -f /usr/local/bin/ffprobe
 
-# ── Remove Build Tools + Final Filesystem Sweep ──
-RUN rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
-    && apt-get purge -y --auto-remove \
+# ── Build statx() compatibility shim ──────────────────────────────────────
+# glibc >= 2.28 tries statx() first for os.stat(). PRoot's statx()
+# translation has a gap that breaks CPython's import machinery when
+# scanning directories to locate C-extension modules (cairo, manimpango).
+# This LD_PRELOAD shim redirects statx() through fstatat(), which PRoot
+# handles correctly.
+#
+# Shipped as its own file and COPY'd in — no heredoc anywhere in this
+# Dockerfile, which avoids BuildKit's parser treating heredoc closing
+# delimiters as the end of a backslash-continued RUN instruction.
+COPY statx_shim.c /tmp/statx_shim.c
+
+RUN gcc -shared -fPIC -O2 -o /usr/local/lib/statx_shim.so /tmp/statx_shim.c \
+    && rm -f /tmp/statx_shim.c \
+    && echo "statx shim built:" \
+    && ls -la /usr/local/lib/statx_shim.so
+
+# ── Remove Build Tools + Final Filesystem Sweep ───────────────────────────
+# gcc and /usr/lib/gcc are removed here — AFTER the shim above, since the
+# shim compile needs gcc's internal cc1/headers that live in /usr/lib/gcc.
+RUN apt-get purge -y --auto-remove \
         build-essential gcc g++ cpp make python3-dev \
         libcairo2-dev libpango1.0-dev libgirepository1.0-dev pkg-config xz-utils \
     && apt-get autoremove -y \
+    && rm -rf /usr/lib/gcc \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt \
     && rm -rf /var/log/apt/* /var/log/dpkg.log \
@@ -129,7 +91,7 @@ RUN rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
 RUN echo 'export PATH="/opt/TinyTeX/bin/aarch64-linux:$PATH"' >> /etc/profile \
     && echo 'PATH="/opt/TinyTeX/bin/aarch64-linux:$PATH"' >> /etc/environment
 
-# ── Stage 2: Verify everything is working ────────────────────────────────────
+# ── Verify everything is working ──────────────────────────────────────────
 RUN echo "Testing Cairo..." && python3 -c "import cairo; print('Cairo OK')" \
     && echo "Testing Manimpango..." && python3 -c "import manimpango; print('Manimpango OK')" \
     && echo "Testing NumPy..." && python3 -c "import numpy; print('NumPy', numpy.__version__, 'OK')" \
@@ -137,6 +99,7 @@ RUN echo "Testing Cairo..." && python3 -c "import cairo; print('Cairo OK')" \
     && echo "Testing LaTeX..." && latex --version | head -1 \
     && echo "Testing Dvisvgm..." && dvisvgm --version \
     && echo "Testing FFmpeg..." && ffmpeg -version 2>&1 | head -1 \
+    && echo "Testing statx shim exists..." && ls -la /usr/local/lib/statx_shim.so \
     && echo "All checks passed."
 
 # ── Version marker ─────────────────────────────────────────────────────────
