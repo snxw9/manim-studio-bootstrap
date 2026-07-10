@@ -56,17 +56,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /usr/lib/gcc \
     \
     # Remove ffprobe — Manim only uses ffmpeg for video encoding
-    && rm -f /usr/local/bin/ffprobe \
-    \
-    # ── Build statx() compatibility shim ──
-    # glibc >= 2.28 tries statx() first for os.stat(). PRoot's statx()
-    # translation has a gap that breaks CPython's import machinery
-    # specifically when scanning directories to locate C-extension modules
-    # (cairo, manimpango). This LD_PRELOAD shim intercepts statx() and
-    # redirects it through fstatat(), which PRoot handles correctly.
-    && echo "Building statx compatibility shim..." \
-    && mkdir -p /tmp/shim && cd /tmp/shim \
-    && cat > statx_shim.c << 'SHIMEOF'
+    && rm -f /usr/local/bin/ffprobe
+
+# ── Build statx() compatibility shim ──
+# glibc >= 2.28 tries statx() first for os.stat(). PRoot's statx()
+# translation has a gap that breaks CPython's import machinery when
+# scanning directories to locate C-extension modules (cairo, manimpango).
+# This LD_PRELOAD shim redirects statx() through fstatat(), which PRoot
+# handles correctly.
+#
+# Must be its own RUN — heredocs cannot be mixed with && continuation
+# chains in the same RUN instruction (that was the parse error above).
+RUN <<'SHIMSCRIPT'
+set -e
+mkdir -p /tmp/shim
+cd /tmp/shim
+cat > statx_shim.c << 'CEOF'
 #define _GNU_SOURCE
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -101,20 +106,23 @@ int statx(int dirfd, const char *pathname, int flags,
     statxbuf->stx_dev_minor = minor(st.st_dev);
     return 0;
 }
-SHIMEOF
-&& gcc -shared -fPIC -O2 -o statx_shim.so statx_shim.c \
-    && mkdir -p /usr/local/lib \
-    && cp statx_shim.so /usr/local/lib/statx_shim.so \
-    && cd / && rm -rf /tmp/shim \
-    && echo "statx shim built: $(ls -la /usr/local/lib/statx_shim.so)" \
-    \
-    # ── Remove Build Tools ──
+CEOF
+gcc -shared -fPIC -O2 -o statx_shim.so statx_shim.c
+mkdir -p /usr/local/lib
+cp statx_shim.so /usr/local/lib/statx_shim.so
+cd /
+rm -rf /tmp/shim
+echo "statx shim built:"
+ls -la /usr/local/lib/statx_shim.so
+SHIMSCRIPT
+
+# ── Remove Build Tools + Final Filesystem Sweep ──
+# (unchanged from before — just isolated as its own RUN, no heredoc involved)
+RUN rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
     && apt-get purge -y --auto-remove \
         build-essential gcc g++ cpp make python3-dev \
         libcairo2-dev libpango1.0-dev libgirepository1.0-dev pkg-config xz-utils \
     && apt-get autoremove -y \
-    \
-    # ── Final Filesystem Sweep ──
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt \
     && rm -rf /var/log/apt/* /var/log/dpkg.log \
