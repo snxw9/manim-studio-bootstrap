@@ -41,9 +41,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm tinytex.tar.xz \
     \
     # ── LaTeX packages Manim needs ──
+    # (mathrsfs swapped for jknapltx + rsfs — fixes a repository naming error)
     && echo "Installing required LaTeX packages for Manim..." \
     && /opt/TinyTeX/bin/aarch64-linux/tlmgr update --self \
-    # Swapped "mathrsfs" for "jknapltx rsfs" to fix the repository naming error
     && /opt/TinyTeX/bin/aarch64-linux/tlmgr install \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e jknapltx rsfs xcolor microtype dvisvgm \
