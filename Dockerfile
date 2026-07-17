@@ -47,7 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && /opt/TinyTeX/bin/aarch64-linux/tlmgr install \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e jknapltx rsfs xcolor microtype dvisvgm \
-        amsmath babel-english cm-super \
+        amsmath amssymb amsfonts babel-english cm-super \
     && /opt/TinyTeX/bin/aarch64-linux/tlmgr path add \
     \
     # ── Safe cleanup that doesn't touch gcc yet ──

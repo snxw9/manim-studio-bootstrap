@@ -21,7 +21,7 @@ The bootstrap archive packages a complete Debian system tailored for Manim:
 * **Pre-compiled libraries:** `libcairo2`, `libpango-1.0`, `pycairo`, `manimpango`
 * **LaTeX Environment (TinyTeX):**
   * Minimal, daily-release TeX Live distribution (matching CTAN) optimized for Manim.
-  * Pre-installed packages: `standalone`, `preview`, `doublestroke`, `physics`, `relsize`, `calligra`, `wasysym`, `ragged2e`, `mathrsfs`, `xcolor`, `microtype`, `dvisvgm`, `amsmath`, `babel-english`, `cm-super`.
+  * Pre-installed packages: `standalone`, `preview`, `doublestroke`, `physics`, `relsize`, `calligra`, `wasysym`, `ragged2e`, `jknapltx`, `rsfs`, `xcolor`, `microtype`, `dvisvgm`, `amsmath`, `amssymb`, `amsfonts`, `babel-english`, `cm-super`.
 * **Multimedia:** BtbN Static FFmpeg & FFprobe (bypasses ~150MB of X11/GUI library bloat)
 * **Fonts:** DejaVu and Noto core fonts for proper text rendering
 
