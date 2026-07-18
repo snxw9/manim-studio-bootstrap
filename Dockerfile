@@ -44,9 +44,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # (mathrsfs swapped for jknapltx + rsfs — fixes a repository naming error)
     # (amssymb removed — it's not a standalone package, amsfonts provides it)
     && echo "Installing required LaTeX packages for Manim..." \
-    && /opt/TinyTeX/bin/aarch64-linux/tlmgr update --self --no-verify-repo \
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr update --self \
        || echo "tlmgr self-update skipped (non-fatal)" \
-    && /opt/TinyTeX/bin/aarch64-linux/tlmgr install --no-verify-repo \
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr install \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e jknapltx rsfs xcolor microtype dvisvgm \
         amsmath amsfonts babel-english cm-super \
