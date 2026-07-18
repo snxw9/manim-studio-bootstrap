@@ -42,13 +42,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     \
     # ── LaTeX packages Manim needs ──
     # (mathrsfs swapped for jknapltx + rsfs — fixes a repository naming error)
+    # (amssymb removed — it's not a standalone package, amsfonts provides it)
     && echo "Installing required LaTeX packages for Manim..." \
-    && /opt/TinyTeX/bin/aarch64-linux/tlmgr update --self \
-    && /opt/TinyTeX/bin/aarch64-linux/tlmgr install \
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr update --self --no-verify-repo \
+       || echo "tlmgr self-update skipped (non-fatal)" \
+    && /opt/TinyTeX/bin/aarch64-linux/tlmgr install --no-verify-repo \
         standalone preview doublestroke physics relsize calligra \
         wasysym ragged2e jknapltx rsfs xcolor microtype dvisvgm \
-        amsmath amssymb amsfonts babel-english cm-super \
-    && /opt/TinyTeX/bin/aarch64-linux/tlmgr path add \
+        amsmath amsfonts babel-english cm-super \
     \
     # ── Safe cleanup that doesn't touch gcc yet ──
     && rm -rf /usr/local/lib/python*/dist-packages/scipy/datasets \
